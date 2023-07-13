@@ -1,0 +1,1134 @@
+---
+title: "HO_Deductible"
+output: html_document
+date: "2022-12-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#https://r-graph-gallery.com/267-reorder-a-variable-in-ggplot2.html
+#https://r-graphics.org/recipe-bar-graph-labels
+```
+
+```{r}
+library(DBI)        #database operations
+library(tidyverse)  #dplyr and dbplyr - sql operations
+library(odbc)       #database connection
+library(lubridate)  #date manipulation
+library(openxlsx)
+```
+
+```{r}
+sqlserver1 <- dbConnect(odbc(),
+                       Driver = "SQL Server",
+                       Server = "xx1",
+                       Database = "Competitive"
+                       )
+
+library(dbplyr)
+ho_ded <- tbl(sqlserver1, in_schema('dbo','TT_HO_Ded')) %>% collect()
+
+```
+
+```{r}
+dt0 <- ho_ded %>% 
+  group_by(st,Yr,ALL_PERIL_DEDUCT) %>% 
+  summarise(ct_by_year=n()) %>% 
+  ungroup() %>% 
+  group_by(st,Yr) %>% 
+  mutate(pct=round(ct_by_year/sum(ct_by_year)*100,1)) %>% 
+  ungroup() %>% 
+  group_by(st,ALL_PERIL_DEDUCT) %>% 
+  mutate(ct_by_st=sum(ct_by_year)) %>% 
+  ungroup() %>% 
+  group_by(st) %>% 
+  mutate(pct1=round(ct_by_st/sum(ct_by_year)*100,1))
+
+dtx <- ho_ded %>% 
+  mutate(state=case_when(st=='CA'~'_CA',
+                         TRUE~'_nonCA')) %>% 
+  select(-st,st=state) %>% 
+ group_by(st,Yr,ALL_PERIL_DEDUCT) %>% 
+  summarise(ct_by_year=n()) %>% 
+  ungroup() %>% 
+  group_by(st,Yr) %>% 
+  mutate(pct=round(ct_by_year/sum(ct_by_year)*100,1)) %>% 
+  ungroup() %>% 
+  group_by(st,ALL_PERIL_DEDUCT) %>% 
+  mutate(ct_by_st=sum(ct_by_year)) %>% 
+  ungroup() %>% 
+  group_by(st) %>% 
+  mutate(pct1=round(ct_by_st/sum(ct_by_year)*100,1))
+
+dt <- bind_rows(dtx,dt0)
+dt
+
+```
+
+```{r}
+dt0_wh <- ho_ded %>% 
+  group_by(st,Yr,WIND_HAIL_DEDUCT) %>% 
+  summarise(ct_by_year=n()) %>% 
+  ungroup() %>% 
+  group_by(st,Yr) %>% 
+  mutate(pct=round(ct_by_year/sum(ct_by_year)*100,1)) %>% 
+  ungroup() %>% 
+  group_by(st,WIND_HAIL_DEDUCT) %>% 
+  mutate(ct_by_st=sum(ct_by_year)) %>% 
+  ungroup() %>% 
+  group_by(st) %>% 
+  mutate(pct1=round(ct_by_st/sum(ct_by_year)*100,1))
+
+dtx_wh <- ho_ded %>% 
+  mutate(state=case_when(st=='CA'~'_CA',
+                         TRUE~'_nonCA')) %>% 
+  select(-st,st=state) %>% 
+ group_by(st,Yr,WIND_HAIL_DEDUCT) %>% 
+  summarise(ct_by_year=n()) %>% 
+  ungroup() %>% 
+  group_by(st,Yr) %>% 
+  mutate(pct=round(ct_by_year/sum(ct_by_year)*100,1)) %>% 
+  ungroup() %>% 
+  group_by(st,WIND_HAIL_DEDUCT) %>% 
+  mutate(ct_by_st=sum(ct_by_year)) %>% 
+  ungroup() %>% 
+  group_by(st) %>% 
+  mutate(pct1=round(ct_by_st/sum(ct_by_year)*100,1))
+
+dt_wh <- bind_rows(dtx_wh,dt0_wh)
+dt_wh
+
+```
+
+```{r}
+dt0_hurr <- ho_ded %>% 
+  group_by(st,Yr,HURRICANE_DEDUCT) %>% 
+  summarise(ct_by_year=n()) %>% 
+  ungroup() %>% 
+  group_by(st,Yr) %>% 
+  mutate(pct=round(ct_by_year/sum(ct_by_year)*100,1)) %>% 
+  ungroup() %>% 
+  group_by(st,HURRICANE_DEDUCT) %>% 
+  mutate(ct_by_st=sum(ct_by_year)) %>% 
+  ungroup() %>% 
+  group_by(st) %>% 
+  mutate(pct1=round(ct_by_st/sum(ct_by_year)*100,1))
+
+dtx_hurr <- ho_ded %>% 
+  mutate(state=case_when(st=='CA'~'_CA',
+                         TRUE~'_nonCA')) %>% 
+  select(-st,st=state) %>% 
+ group_by(st,Yr,HURRICANE_DEDUCT) %>% 
+  summarise(ct_by_year=n()) %>% 
+  ungroup() %>% 
+  group_by(st,Yr) %>% 
+  mutate(pct=round(ct_by_year/sum(ct_by_year)*100,1)) %>% 
+  ungroup() %>% 
+  group_by(st,HURRICANE_DEDUCT) %>% 
+  mutate(ct_by_st=sum(ct_by_year)) %>% 
+  ungroup() %>% 
+  group_by(st) %>% 
+  mutate(pct1=round(ct_by_st/sum(ct_by_year)*100,1))
+
+dt_hurr <- bind_rows(dtx_hurr,dt0_hurr)
+
+dt_hurr
+
+```
+
+```{r}
+all_peril_all_st <- dt %>% 
+  select(st,ALL_PERIL_DEDUCT,pct1) %>% 
+  # filter(Yr==2022) %>% 
+  filter(st!='CA') %>%
+  unique() %>% 
+  ggplot(aes(x=as.factor(ALL_PERIL_DEDUCT),y=fct_reorder(as.factor(st),desc(st)))) +
+  geom_tile(aes(fill=pct1),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct1),size=3) +
+  theme_classic() +
+ labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Percent",
+       title = "ALL_PERIL_Deductible (2012-2022)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top")
+
+all_peril_all_st
+```
+
+```{r}
+all_peril_all_st_wh <- dt_wh %>% 
+  select(st,WIND_HAIL_DEDUCT,pct1) %>% 
+  # filter(Yr==2022) %>% 
+  filter(st!='CA') %>%
+  unique() %>% 
+  ggplot(aes(x=as.factor(WIND_HAIL_DEDUCT),y=fct_reorder(as.factor(st),desc(st)))) +
+  geom_tile(aes(fill=pct1),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct1),size=3) +
+  theme_classic() +
+ labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Percent",
+       title = "WIND_HAIL_PERIL_Deductible (2012-2022)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+
+all_peril_all_st_wh
+```
+
+```{r}
+all_peril_all_st_hurr <- dt_hurr %>% 
+  select(st,HURRICANE_DEDUCT,pct1) %>% 
+  # filter(Yr==2022) %>% 
+  filter(st!='CA') %>%
+  unique() %>% 
+  ggplot(aes(x=as.factor(HURRICANE_DEDUCT),y=fct_reorder(as.factor(st),desc(st)))) +
+  geom_tile(aes(fill=pct1),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct1),size=3) +
+  theme_classic() +
+ labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Percent",
+       title = "HURRICANE_PERIL_Deductible (2012-2022)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+all_peril_all_st_hurr
+```
+
+```{r}
+dat <- (dt %>% mutate(Type="ALL_PERIL_DEDUCT") %>% select(State=st,Type,Year=Yr,Deductibles=ALL_PERIL_DEDUCT,ct_by_year,pct,ct_by_st,pct1)) %>% 
+  bind_rows((dt_wh %>% mutate(Type="WIND_HAIL_DEDUCT") %>% select(State=st,Type,Year=Yr,Deductibles=WIND_HAIL_DEDUCT,ct_by_year,pct,ct_by_st,pct1))) %>%   
+  bind_rows((dt_hurr %>% mutate(Type="HURRICANE_DEDUCT") %>% select(State=st,Type,Year=Yr,Deductibles=HURRICANE_DEDUCT,ct_by_year,pct,ct_by_st,pct1)))
+
+```
+
+
+```{r}
+wb <- createWorkbook()
+# wb <- loadWorkbook("I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx")
+addWorksheet(wb, "Overall")
+print(all_peril_all_st)
+insertPlot(wb, "Overall",startRow = 2, startCol = 2, height = 10,width = 10, fileType = "png", units = "in")
+print(all_peril_all_st_wh)
+insertPlot(wb, "Overall",startRow = 2, startCol = 15, height = 10,width = 10, fileType = "png", units = "in")
+print(all_peril_all_st_hurr)
+insertPlot(wb, "Overall",startRow = 2, startCol = 28, height = 10,width = 10, fileType = "png", units = "in")
+addStyle(wb,"Overall", createStyle(fgFill = "#1F497D"), rows = 1:40, cols = 1:46, gridExpand = TRUE)
+addWorksheet(wb, "Aggregated_data")
+writeData(wb,startRow = 1, startCol = 1, "Aggregated_data",dat %>% filter(State!='CA'))  
+# writeData(wb,startRow = 1, startCol = 1, "Data",dt %>% filter(st!='CA'))  
+# writeData(wb,startRow = 1, startCol = 9, "Data",dt_wh %>% filter(st!='CA'))
+# writeData(wb,startRow = 1, startCol = 17, "Data",dt_hurr %>% filter(st!='CA'))
+saveWorkbook(wb,"I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx",overwrite = TRUE)
+```
+
+```{r eval=FALSE}
+dt %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(st=='CA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(ALL_PERIL_DEDUCT)
+                            , desc(ALL_PERIL_DEDUCT)),x=as.factor(Yr))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  facet_wrap(~st,ncol = 2) +
+labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Percent",
+       title = "ALL_PERIL_Deductible by state") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        # axis.text.y = element_blank(),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  
+```
+
+
+
+```{r eval=FALSE}
+ho_ded %>% 
+  filter(st=='CA') %>% 
+  group_by(Yr,ALL_PERIL_DEDUCT) %>% 
+  summarise(ct=n()) %>% 
+  ungroup() %>% 
+  group_by(Yr) %>% 
+  mutate(pct=ct/sum(ct)*100) %>% 
+  ggplot(aes(x=as.factor(Yr),y=pct
+             ,fill=as.factor(ALL_PERIL_DEDUCT))) +
+  geom_col()
+
+```
+
+```{r eval=FALSE}
+ho_ded %>% 
+  mutate(state=case_when(st=='CA'~'CA',
+                         TRUE~'nonCA')) %>% 
+  filter(!ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  group_by(state,Yr,ALL_PERIL_DEDUCT) %>% 
+  summarise(ct=n()) %>% 
+  ungroup() %>% 
+  group_by(state,Yr) %>% 
+  mutate(pct=ct/sum(ct)*100) %>% 
+  ungroup() %>% 
+  arrange(state,Yr,desc(ALL_PERIL_DEDUCT)) %>%   
+  group_by(state,Yr) %>% 
+  mutate(label_y=cumsum(pct))
+
+```
+
+
+```{r}
+gph1 <- ho_ded %>% 
+  mutate(state=case_when(st=='CA'~'CA',
+                         TRUE~'nonCA')) %>% 
+  filter(!ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  filter(state=='CA') %>%
+  group_by(state,Yr,ALL_PERIL_DEDUCT) %>% 
+  summarise(ct=n()) %>% 
+  ungroup() %>% 
+  group_by(state,Yr) %>% 
+  mutate(pct=ct/sum(ct)*100) %>% 
+  ungroup() %>% 
+  arrange(state,Yr,desc(ALL_PERIL_DEDUCT)) %>%   
+  group_by(state,Yr) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  
+  ggplot(aes(x=as.factor(Yr),y=pct
+             ,fill=as.factor(ALL_PERIL_DEDUCT))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  # facet_wrap(~state) +
+  labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Ded_Limit",
+       title = "ALL_PERIL_Deductible (CA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        # axis.text.y = element_blank(),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+
+gph2 <- ho_ded %>% 
+  mutate(state=case_when(st=='CA'~'CA',
+                         TRUE~'nonCA')) %>% 
+  filter(!ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  filter(state!='CA') %>%
+  group_by(state,Yr,ALL_PERIL_DEDUCT) %>% 
+  summarise(ct=n()) %>% 
+  ungroup() %>% 
+  group_by(state,Yr) %>% 
+  mutate(pct=ct/sum(ct)*100) %>% 
+  ungroup() %>% 
+  arrange(state,Yr,desc(ALL_PERIL_DEDUCT)) %>%   
+  group_by(state,Yr) %>% 
+  mutate(label_y=cumsum(pct)-0.1*pct) %>%  
+  ggplot(aes(x=as.factor(Yr),y=pct
+             ,fill=as.factor(ALL_PERIL_DEDUCT))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  # facet_wrap(~state) +
+  labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Ded_Limit",
+       title = "ALL_PERIL_Deductible (non-CA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        # axis.text.y = element_blank(),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top")  
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+```
+
+```{r}
+gph3 <- dt  %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(st=='_CA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(ALL_PERIL_DEDUCT)
+                            , desc(ALL_PERIL_DEDUCT)),x=as.factor(Yr))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  # facet_wrap(~st,ncol = 2) +
+labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Percent",
+       title = "ALL_PERIL (CA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        # axis.text.y = element_blank(),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top") 
+
+gph4 <- dt  %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(st=='_nonCA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(ALL_PERIL_DEDUCT)
+                            , desc(ALL_PERIL_DEDUCT)),x=as.factor(Yr))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  # facet_wrap(~st,ncol = 2) +
+labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Percent",
+       title = "ALL_PERIL (nonCA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        # axis.text.y = element_blank(),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top") 
+```
+
+```{r eval=FALSE}
+ho_ded %>% 
+  filter(st!='CA') %>% 
+  group_by(Yr,ALL_PERIL_DEDUCT) %>% 
+  summarise(ct=n())
+
+```
+
+```{r}
+gph1 <- dat %>% 
+  filter(!Deductibles %in% c(0.5,1,2,3)) %>% 
+  filter(Type=="ALL_PERIL_DEDUCT") %>% 
+  filter(State=='_CA') %>%
+  ungroup() %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  #-0.3*pct
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "ALL_PERIL_Deductible Trend (CA)",
+       caption = "Ded 0.5, 1, 2 & 3 are omitted from display") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+
+gph2 <- dat %>% 
+  filter(!Deductibles %in% c(0.5,1,2,3)) %>% 
+  filter(Type=="ALL_PERIL_DEDUCT") %>% 
+  filter(State=='_nonCA') %>%
+  ungroup() %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  #-0.3*pct
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "ALL_PERIL_Deductible Trend (nonCA)",
+       caption = "Ded 0.5, 1, 2 & 3 are omitted from display") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+
+gph1
+gph2
+
+```
+
+```{r}
+gph3 <- dat  %>% 
+  filter(Type == "ALL_PERIL_DEDUCT") %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(State=='_CA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  # facet_wrap(~st,ncol = 2) +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "ALL_PERIL_Deductible Distribution (CA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top") 
+
+gph4 <-  dat  %>% 
+  filter(Type == "ALL_PERIL_DEDUCT") %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(State=='_nonCA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  # facet_wrap(~st,ncol = 2) +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "ALL_PERIL_Deductible Distribution (nonCA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top")  
+
+gph3
+gph4
+```
+
+```{r}
+gph5 <- dat %>% 
+  filter(!Deductibles %in% c(0.5,1,2,3,5)) %>% 
+  filter(Type=="WIND_HAIL_DEDUCT") %>% 
+  filter(State=='_CA') %>%
+  ungroup() %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  #-0.3*pct
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "WIND_HAIL_Deductible Trend (CA)",
+       caption = "Ded 0.5, 1, 2, 3 & 5 are omitted from display") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+
+gph6 <- dat %>% 
+  filter(!Deductibles %in% c(0.5,1,2,3,5)) %>% 
+  filter(Type=="WIND_HAIL_DEDUCT") %>% 
+  filter(State=='_nonCA') %>%
+  ungroup() %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  #-0.3*pct
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "WIND_HAIL_Deductible Trend (nonCA)",
+       caption = "Ded 0.5, 1, 2, 3 & 5 are omitted from display") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+
+gph7 <- dat  %>% 
+  filter(Type == "WIND_HAIL_DEDUCT") %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(State=='_CA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  # facet_wrap(~st,ncol = 2) +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "WIND_HAIL_Deductible Distribution (CA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top") 
+
+gph8 <-  dat  %>% 
+  filter(Type == "WIND_HAIL_DEDUCT") %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(State=='_nonCA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  # facet_wrap(~st,ncol = 2) +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "WIND_HAIL_Deductible Distribution (nonCA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top")  
+
+gph5
+gph6
+gph7
+gph8
+
+```
+
+```{r}
+gph9 <- dat %>% 
+  filter(!Deductibles %in% c(0.5,1,2,3,5)) %>% 
+  filter(Type=="HURRICANE_DEDUCT") %>% 
+  filter(State=='_CA') %>%
+  ungroup() %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  #-0.3*pct
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "HURRICANE_Deductible Trend (CA)",
+       caption = "Ded 0.5, 1, 2, 3 & 5 are omitted from display") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+
+gph10 <- dat %>% 
+  # filter(!Deductibles %in% c(0.5,1,2,3,5)) %>% 
+  filter(Type=="HURRICANE_DEDUCT") %>% 
+  filter(State=='_nonCA') %>%
+  ungroup() %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  #-0.3*pct
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "HURRICANE_Deductible Trend (nonCA)",
+       # caption = "Ded 0.5, 1, 2, 3 & 5 are omitted from display"
+       ) +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  +
+  scale_x_discrete(position = "top") 
+
+gph11 <- dat  %>% 
+  filter(Type == "HURRICANE_DEDUCT") %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(State=='_CA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  # facet_wrap(~st,ncol = 2) +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "HURRICANE_Deductible Distribution (CA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top") 
+
+gph12 <-  dat  %>% 
+  filter(Type == "HURRICANE_DEDUCT") %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(State=='_nonCA') %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  # facet_wrap(~st,ncol = 2) +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "HURRICANE_Deductible Distribution (nonCA)") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    # ,legend.position = 'none',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top")  
+
+gph9
+gph10
+gph11
+gph12
+
+```
+
+```{r}
+wb <- loadWorkbook("I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx")
+addWorksheet(wb, "Graph")
+print(gph1)
+insertPlot(wb, "Graph",startRow = 2, startCol = 2, height = 4.5,width = 6.4, fileType = "png", units = "in")
+print(gph2)
+insertPlot(wb, "Graph",startRow = 2, startCol = 10, height = 4.5,width = 6.4, fileType = "png", units = "in")
+print(gph3)
+insertPlot(wb, "Graph",startRow = 24, startCol = 2, height = 4,width = 6.4, fileType = "png", units = "in")
+print(gph4)
+insertPlot(wb, "Graph",startRow = 24, startCol = 10, height = 4,width = 6.4, fileType = "png", units = "in")
+print(gph5)
+insertPlot(wb, "Graph",startRow = 2, startCol = 18, height = 4.5,width = 6.4, fileType = "png", units = "in")
+print(gph6)
+insertPlot(wb, "Graph",startRow = 2, startCol = 26, height = 4.5,width = 6.4, fileType = "png", units = "in")
+print(gph7)
+insertPlot(wb, "Graph",startRow = 24, startCol = 18, height = 4,width = 6.4, fileType = "png", units = "in")
+print(gph8)
+insertPlot(wb, "Graph",startRow = 24, startCol = 26, height = 4,width = 6.4, fileType = "png", units = "in")
+print(gph9)
+insertPlot(wb, "Graph",startRow = 2, startCol = 34, height = 4.5,width = 6.4, fileType = "png", units = "in")
+print(gph10)
+insertPlot(wb, "Graph",startRow = 2, startCol = 42, height = 4.5,width = 6.4, fileType = "png", units = "in")
+print(gph11)
+insertPlot(wb, "Graph",startRow = 24, startCol = 34, height = 4,width = 6.4, fileType = "png", units = "in")
+print(gph12)
+insertPlot(wb, "Graph",startRow = 24, startCol = 42, height = 4,width = 6.4, fileType = "png", units = "in")
+addStyle(wb,"Graph", createStyle(fgFill = "#1F497D"), rows = 1:44, cols = 1:50, gridExpand = TRUE)
+
+
+# addWorksheet(wb, "Summary")
+# writeData(wb,startRow = 1, startCol = 1, "Summary", bi_lim)  
+
+saveWorkbook(wb,"I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx",overwrite = TRUE)
+```
+
+
+
+```{r}
+gph13_ <- dt %>% 
+  filter(!st %in% c("_CA","_nonCA")) %>% 
+  arrange(st,Yr,desc(ALL_PERIL_DEDUCT)) %>%   
+  group_by(st,Yr) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  
+  ggplot(aes(x=as.factor(Yr),y=pct
+             ,fill=as.factor(ALL_PERIL_DEDUCT))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  facet_wrap(~st,ncol=4) +
+    guides(colour = guide_legend(nrow = 1)) +
+  scale_x_discrete(position = "top") +
+  theme_bw() +
+  labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Ded_Limit",
+       title = "ALL_PERIL_Deductible") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank()
+    ,legend.position = 'top',
+        legend.justification='left',
+        legend.direction='horizontal',
+        # axis.text.y = element_blank(),
+        plot.title = element_text(colour = "blue", face='bold', size=12))  
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+
+gph14_ <- dt  %>% 
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(!st %in% c('_nonCA',"_CA")) %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(ALL_PERIL_DEDUCT)
+                            , desc(ALL_PERIL_DEDUCT)),x=as.factor(Yr))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  facet_wrap(~st,ncol = 4) +
+  theme_bw() +
+labs(y = "Vehicle Age",
+       x = "Deductible",
+       fill="Percent",
+       title = "ALL_PERIL_Deductible") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    legend.position = 'top',
+            legend.justification='left',
+        legend.direction='horizontal',
+        # axis.text.y = element_blank(),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  scale_x_discrete(position = "top") 
+
+gph13_
+gph14_
+```
+
+```{r}
+gph13 <- dat %>% 
+  filter(Type=="ALL_PERIL_DEDUCT") %>% 
+  filter(!State %in% c("_CA","_nonCA")) %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  facet_wrap(~State,ncol=4) +
+    guides(colour = guide_legend(nrow = 1)) +
+  scale_x_discrete(position = "top") +
+  theme_bw() +
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "ALL_PERIL_Deductible Trend") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank()
+    ,legend.position = 'top',
+        legend.justification='left',
+        legend.direction='horizontal',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  theme(strip.text = element_text(face = "bold",colour = "blue")) 
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+
+gph14 <- dat  %>% 
+  filter(Type=="ALL_PERIL_DEDUCT") %>%   
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(!State %in% c('_nonCA',"_CA")) %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  facet_wrap(~State,ncol = 4) +
+  theme_bw() +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "ALL_PERIL_Deductible Distribution") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    legend.position = 'top',
+            legend.justification='left',
+        legend.direction='horizontal',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+   theme(strip.text = element_text(face = "bold",colour = "blue")) +
+  scale_x_discrete(position = "top") 
+
+gph13
+gph14
+```
+
+```{r}
+wb <- loadWorkbook("I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx")
+addWorksheet(wb, "All_Peril_Trend")
+print(gph13)
+insertPlot(wb, "All_Peril_Trend",startRow = 2, startCol = 2, height = 35,width = 20, fileType = "png", units = "in")
+# print(gph2)
+# insertPlot(wb, "Graph1",startRow = 2, startCol = 10, height = 12,width = 6, fileType = "png", units = "in")
+
+addStyle(wb,"All_Peril_Trend", createStyle(fgFill = "#1F497D"), rows = 1:170, cols = 1:26, gridExpand = TRUE)
+addWorksheet(wb, "All_Peril_Dist")
+print(gph14)
+insertPlot(wb, "All_Peril_Dist",startRow = 2, startCol = 2, height = 35,width = 20, fileType = "png", units = "in")
+addStyle(wb,"All_Peril_Dist", createStyle(fgFill = "#1F497D"), rows = 1:170, cols = 1:26, gridExpand = TRUE)
+# addWorksheet(wb, "Summary")
+# writeData(wb,startRow = 1, startCol = 1, "Summary", bi_lim)  
+
+saveWorkbook(wb,"I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx",overwrite = TRUE)
+```
+
+```{r}
+gph15 <- dat %>% 
+  filter(Type=="WIND_HAIL_DEDUCT") %>% 
+  filter(!State %in% c("_CA","_nonCA")) %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  facet_wrap(~State,ncol=4) +
+    guides(colour = guide_legend(nrow = 1)) +
+  scale_x_discrete(position = "top") +
+  theme_bw() +
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "WIND_HAIL_Deductible Trend") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank()
+    ,legend.position = 'top',
+        legend.justification='left',
+        legend.direction='horizontal',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  theme(strip.text = element_text(face = "bold",colour = "blue")) 
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+
+gph16 <- dat  %>% 
+  filter(Type=="WIND_HAIL_DEDUCT") %>%   
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(!State %in% c('_nonCA',"_CA")) %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  facet_wrap(~State,ncol = 4) +
+  theme_bw() +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "WIND_HAIL_Deductible Distribution") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    legend.position = 'top',
+            legend.justification='left',
+        legend.direction='horizontal',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+   theme(strip.text = element_text(face = "bold",colour = "blue")) +
+  scale_x_discrete(position = "top") 
+
+gph15
+gph16
+```
+
+```{r}
+wb <- loadWorkbook("I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx")
+addWorksheet(wb, "WIND_HAIL_Trend")
+print(gph15)
+insertPlot(wb, "WIND_HAIL_Trend",startRow = 2, startCol = 2, height = 35,width = 20, fileType = "png", units = "in")
+# print(gph2)
+# insertPlot(wb, "Graph1",startRow = 2, startCol = 10, height = 12,width = 6, fileType = "png", units = "in")
+
+addStyle(wb,"WIND_HAIL_Trend", createStyle(fgFill = "#1F497D"), rows = 1:170, cols = 1:26, gridExpand = TRUE)
+addWorksheet(wb, "WIND_HAIL_Dist")
+print(gph16)
+insertPlot(wb, "WIND_HAIL_Dist",startRow = 2, startCol = 2, height = 35,width = 20, fileType = "png", units = "in")
+addStyle(wb,"WIND_HAIL_Dist", createStyle(fgFill = "#1F497D"), rows = 1:170, cols = 1:26, gridExpand = TRUE)
+# addWorksheet(wb, "Summary")
+# writeData(wb,startRow = 1, startCol = 1, "Summary", bi_lim)  
+
+saveWorkbook(wb,"I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx",overwrite = TRUE)
+```
+
+```{r}
+gph17 <- dat %>% 
+  filter(Type=="HURRICANE_DEDUCT") %>% 
+  filter(!State %in% c("_CA","_nonCA")) %>% 
+  arrange(State,Year,desc(Deductibles)) %>%   
+  group_by(State,Year) %>% 
+  mutate(label_y=cumsum(pct)-0.3*pct) %>%  
+  ggplot(aes(x=as.factor(Year),y=pct
+             ,fill=as.factor(Deductibles))) +
+  geom_col() +
+  geom_text(aes(y=label_y,label=round(pct,1)),vjust=1.5,size=2.7,alpha=0.5) + #,position=position_jitter(width=1,height=1)) +  
+  facet_wrap(~State,ncol=4) +
+    guides(colour = guide_legend(nrow = 1)) +
+  scale_x_discrete(position = "top") +
+  theme_bw() +
+  labs(
+    # y = "Vehicle Age",
+    #    x = "Deductible",
+       fill="Ded_Limit",
+       title = "HURRICANE_Deductible Trend") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank()
+    ,legend.position = 'top',
+        legend.justification='left',
+        legend.direction='horizontal',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+  theme(strip.text = element_text(face = "bold",colour = "blue")) 
+  # scale_y_continuous(limits = c(1, 120))
+# +
+# expand_limits(y = c(95, 100))
+
+gph18 <- dat  %>% 
+  filter(Type=="HURRICANE_DEDUCT") %>%   
+  select(-ct_by_year,-ct_by_st,-pct1) %>% 
+  filter(!State %in% c('_nonCA',"_CA")) %>%
+  # filter(st %in% c('CA') & !ALL_PERIL_DEDUCT %in% c(0.5,1,2,3)) %>% 
+  # arrange(desc(ALL_PERIL_DEDUCT)) %>% 
+  # ggplot(aes(y=as.factor(ALL_PERIL_DEDUCT),x=as.factor(Yr))) +
+   ggplot(aes(y=fct_reorder(as.factor(Deductibles)
+                            , desc(Deductibles)),x=as.factor(Year))) +
+  geom_tile(aes(fill=pct),size=2.5) +
+  scale_fill_continuous(trans = 'reverse',low='blue',high='grey') +  
+  geom_text(aes(label=pct),size=3) +
+  facet_wrap(~State,ncol = 4) +
+  theme_bw() +
+labs(
+  # y = "Vehicle Age",
+  #      x = "Deductible",
+       fill="Percent",
+       title = "HURRICANE_Deductible Distribution") +
+    # theme(plot.caption = element_text(colour = "blue", face='bold', size=12)) +
+  theme(
+    axis.title = element_blank(),
+    legend.position = 'top',
+            legend.justification='left',
+        legend.direction='horizontal',
+        axis.text = element_text(face = "bold"),
+        plot.title = element_text(colour = "blue", face='bold', size=12)) +
+   theme(strip.text = element_text(face = "bold",colour = "blue")) +
+  scale_x_discrete(position = "top") 
+
+gph17
+gph18
+```
+
+```{r}
+wb <- loadWorkbook("I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx")
+addWorksheet(wb, "HURRICANE_Trend")
+print(gph17)
+insertPlot(wb, "HURRICANE_Trend",startRow = 2, startCol = 2, height = 35,width = 20, fileType = "png", units = "in")
+# print(gph2)
+# insertPlot(wb, "Graph1",startRow = 2, startCol = 10, height = 12,width = 6, fileType = "png", units = "in")
+
+addStyle(wb,"HURRICANE_Trend", createStyle(fgFill = "#1F497D"), rows = 1:170, cols = 1:26, gridExpand = TRUE)
+addWorksheet(wb, "HURRICANE_Dist")
+print(gph18)
+insertPlot(wb, "HURRICANE_Dist",startRow = 2, startCol = 2, height = 35,width = 20, fileType = "png", units = "in")
+addStyle(wb,"HURRICANE_Dist", createStyle(fgFill = "#1F497D"), rows = 1:170, cols = 1:26, gridExpand = TRUE)
+# addWorksheet(wb, "Summary")
+# writeData(wb,startRow = 1, startCol = 1, "Summary", bi_lim)  
+
+saveWorkbook(wb,"I:/0.NEW/Product_Mgmt/HO_inforce_Deductible_over_the_year.xlsx",overwrite = TRUE)
+```
